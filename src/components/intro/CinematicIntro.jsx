@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import gsap from 'gsap';
-import { ArrowRight, FastForward, Sparkles, Volume2, VolumeX } from 'lucide-react';
+import { ArrowRight, FastForward, Sparkles } from 'lucide-react';
 import Scene3D from './Scene3D';
 import { INTRO_STAGES, BRAND } from '../../data/brandData';
 import { isReducedMotionPreferred, isWebGLAvailable, setIntroSeenStatus } from '../../utils/accessibility';
@@ -9,12 +9,10 @@ export default function CinematicIntro({ onComplete }) {
   const [currentStage, setCurrentStage] = useState(1);
   const [isEntering, setIsEntering] = useState(false);
   const [webGLSupported, setWebGLSupported] = useState(true);
-  const [audioEnabled, setAudioEnabled] = useState(false);
   const containerRef = useRef(null);
   const stageTimeoutRef = useRef([]);
   const brandRevealRef = useRef(null);
   const stageTextRef = useRef(null);
-  const audioCtxRef = useRef(null);
 
   const reducedMotion = isReducedMotionPreferred();
 
@@ -41,9 +39,6 @@ export default function CinematicIntro({ onComplete }) {
 
     return () => {
       stageTimeoutRef.current.forEach(clearTimeout);
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close().catch(() => {});
-      }
     };
   }, [reducedMotion]);
 
@@ -69,60 +64,6 @@ export default function CinematicIntro({ onComplete }) {
     }
   }, [currentStage]);
 
-  // Ambient sound synthesizer using native Web Audio API
-  const toggleAudio = () => {
-    if (!audioEnabled) {
-      try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const ctx = new AudioContext();
-        audioCtxRef.current = ctx;
-
-        const bufferSize = ctx.sampleRate * 2;
-        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const output = noiseBuffer.getChannelData(0);
-        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-        for (let i = 0; i < bufferSize; i++) {
-          const white = Math.random() * 2 - 1;
-          b0 = 0.99886 * b0 + white * 0.0555179;
-          b1 = 0.99332 * b1 + white * 0.0750759;
-          b2 = 0.96900 * b2 + white * 0.1538520;
-          b3 = 0.86650 * b3 + white * 0.3104856;
-          b4 = 0.55000 * b4 + white * 0.5329522;
-          b5 = -0.7616 * b5 - white * 0.0168980;
-          output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.04;
-          b6 = white * 0.115926;
-        }
-
-        const whiteNoise = ctx.createBufferSource();
-        whiteNoise.buffer = noiseBuffer;
-        whiteNoise.loop = true;
-
-        const filter = ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(320, ctx.currentTime);
-
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.01, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 1.5);
-
-        whiteNoise.connect(filter);
-        filter.connect(gain);
-        gain.connect(ctx.destination);
-        whiteNoise.start();
-
-        setAudioEnabled(true);
-      } catch (e) {
-        console.warn('Web Audio synthesis error:', e);
-      }
-    } else {
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close().catch(() => {});
-        audioCtxRef.current = null;
-      }
-      setAudioEnabled(false);
-    }
-  };
-
   // Accelerated, seamless transition into the website
   const handleEnterExperience = () => {
     setIsEntering(true);
@@ -136,7 +77,6 @@ export default function CinematicIntro({ onComplete }) {
         duration: 0.85,
         ease: "power2.inOut",
         onComplete: () => {
-          if (audioCtxRef.current) audioCtxRef.current.close().catch(() => {});
           onComplete();
         }
       });
@@ -149,7 +89,6 @@ export default function CinematicIntro({ onComplete }) {
   const handleSkipIntro = () => {
     stageTimeoutRef.current.forEach(clearTimeout);
     setIntroSeenStatus(true);
-    if (audioCtxRef.current) audioCtxRef.current.close().catch(() => {});
     gsap.killTweensOf(containerRef.current);
     onComplete();
   };
@@ -194,27 +133,7 @@ export default function CinematicIntro({ onComplete }) {
           </span>
         </div>
 
-        <div className="flex items-center space-x-3">
-          {/* Soundscape Synthesizer Toggle */}
-          <button
-            onClick={toggleAudio}
-            className="flex items-center space-x-1.5 text-xs text-econest-lightest/80 hover:text-white py-2 px-3 rounded-full border border-white/15 hover:border-white/35 backdrop-blur-md bg-white/5 transition-all"
-            aria-label={audioEnabled ? "Disable ambient sound" : "Enable ambient nature soundscape"}
-            title="Toggle synthesized atmospheric breeze"
-          >
-            {audioEnabled ? (
-              <>
-                <Volume2 className="w-3.5 h-3.5 text-econest-fresh" />
-                <span className="hidden sm:inline text-[11px] tracking-wider uppercase">Sound On</span>
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-3.5 h-3.5 text-white/60" />
-                <span className="hidden sm:inline text-[11px] tracking-wider uppercase">Sound Off</span>
-              </>
-            )}
-          </button>
-
+        <div className="flex items-center">
           {/* Instant Skip Intro Button */}
           <button
             onClick={handleSkipIntro}
